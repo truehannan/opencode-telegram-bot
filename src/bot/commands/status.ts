@@ -8,13 +8,22 @@ import { getAgentDisplayName } from "../../agent/types.js";
 import { fetchCurrentModel } from "../../model/manager.js";
 import { keyboardManager } from "../../keyboard/manager.js";
 import { pinnedMessageManager } from "../../pinned/manager.js";
+import { opencodeStateMonitor } from "../../opencode/state-monitor.js";
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
 import { sendBotText } from "../utils/telegram-text.js";
 
 export async function statusCommand(ctx: CommandContext<Context>) {
   try {
-    const { data, error } = await opencodeClient.global.health();
+    const monitoredState = opencodeStateMonitor.getSnapshot();
+    const healthResponse = monitoredState ? null : await opencodeClient.global.health();
+    const data = monitoredState
+      ? {
+          healthy: monitoredState.healthy,
+          version: monitoredState.version ?? undefined,
+        }
+      : healthResponse?.data;
+    const error = monitoredState ? null : healthResponse?.error;
 
     if (error || !data) {
       throw error || new Error("No data received from server");
@@ -31,15 +40,20 @@ export async function statusCommand(ctx: CommandContext<Context>) {
     })}\n`;
 
     // Add agent information
-    const currentAgent = await fetchCurrentAgent();
+    const currentAgent = monitoredState?.agent ?? (await fetchCurrentAgent());
     const agentDisplay = currentAgent
       ? getAgentDisplayName(currentAgent)
       : t("status.agent_not_set");
     message += `${t("status.line.mode", { mode: agentDisplay })}\n`;
 
     // Add model information
-    const currentModel = fetchCurrentModel();
-    const modelDisplay = `🤖 ${currentModel.providerID}/${currentModel.modelID}`;
+    const currentModel = monitoredState?.model
+      ? monitoredState.model
+      : (() => {
+          const model = fetchCurrentModel();
+          return `${model.providerID}/${model.modelID}`;
+        })();
+    const modelDisplay = `🤖 ${currentModel}`;
     message += `${t("status.line.model", { model: modelDisplay })}\n`;
 
     const currentProject = getCurrentProject();

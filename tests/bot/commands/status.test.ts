@@ -19,6 +19,7 @@ const mocked = vi.hoisted(() => ({
   pinnedRefreshContextLimitMock: vi.fn(),
   pinnedGetContextInfoMock: vi.fn(),
   sendBotTextMock: vi.fn(),
+  monitorGetSnapshotMock: vi.fn(),
 }));
 
 vi.mock("../../../src/opencode/client.js", () => ({
@@ -72,6 +73,12 @@ vi.mock("../../../src/bot/utils/telegram-text.js", () => ({
   sendBotText: mocked.sendBotTextMock,
 }));
 
+vi.mock("../../../src/opencode/state-monitor.js", () => ({
+  opencodeStateMonitor: {
+    getSnapshot: mocked.monitorGetSnapshotMock,
+  },
+}));
+
 describe("bot/commands/status", () => {
   beforeEach(() => {
     mocked.healthMock.mockReset();
@@ -90,6 +97,7 @@ describe("bot/commands/status", () => {
     mocked.pinnedRefreshContextLimitMock.mockReset();
     mocked.pinnedGetContextInfoMock.mockReset();
     mocked.sendBotTextMock.mockReset();
+    mocked.monitorGetSnapshotMock.mockReset();
 
     mocked.healthMock.mockResolvedValue({ data: { healthy: true, version: "1.0.0" }, error: null });
     mocked.getCurrentSessionMock.mockReturnValue({ id: "s1", title: "S", directory: "/repo" });
@@ -104,6 +112,7 @@ describe("bot/commands/status", () => {
     mocked.pinnedRefreshContextLimitMock.mockResolvedValue(undefined);
     mocked.pinnedGetContextInfoMock.mockReturnValue(null);
     mocked.sendBotTextMock.mockResolvedValue(undefined);
+    mocked.monitorGetSnapshotMock.mockReturnValue(null);
   });
 
   it("includes TTS status in the rendered message", async () => {
@@ -148,5 +157,33 @@ describe("bot/commands/status", () => {
     const message = mocked.sendBotTextMock.mock.calls[0]?.[0]?.text as string;
     expect(message).toContain("Project: /repo-main: feature/mobile");
     expect(message).toContain("Worktree: /repo-feature");
+  });
+
+  it("uses background monitor snapshot when available", async () => {
+    mocked.monitorGetSnapshotMock.mockReturnValue({
+      checkedAt: new Date().toISOString(),
+      healthy: true,
+      version: "2.0.0",
+      projectWorktree: "/repo",
+      sessionId: "s1",
+      sessionTitle: "S",
+      sessionStatusType: "idle",
+      model: "anthropic/claude-4",
+      agent: "build",
+    });
+
+    const ctx = {
+      chat: { id: 42, type: "private" },
+      message: { text: "/status" },
+      api: {},
+      reply: vi.fn(),
+    } as unknown as Context;
+
+    await statusCommand(ctx as never);
+
+    expect(mocked.healthMock).not.toHaveBeenCalled();
+    const message = mocked.sendBotTextMock.mock.calls[0]?.[0]?.text as string;
+    expect(message).toContain("Version: 2.0.0");
+    expect(message).toContain("Model: 🤖 anthropic/claude-4");
   });
 });

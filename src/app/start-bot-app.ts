@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { cleanupBotRuntime, createBot } from "../bot/index.js";
 import { config } from "../config.js";
 import { opencodeAutoRestartService } from "../opencode/auto-restart.js";
+import { opencodeStateMonitor } from "../opencode/state-monitor.js";
 import {
   notifyOpencodeReadyIfHealthy,
   registerOpenCodeReadyRefreshHandler,
@@ -58,6 +59,7 @@ export async function startBotApp(): Promise<void> {
     taskName: "app.opencodeStartup",
     task: async () => {
       await opencodeAutoRestartService.start();
+      opencodeStateMonitor.start();
       await notifyOpencodeReadyIfHealthy("startup");
     },
   });
@@ -100,6 +102,7 @@ export async function startBotApp(): Promise<void> {
     logger.info(`[App] Received ${signal}, shutting down...`);
     cleanupBotRuntime(`app_shutdown_${signal.toLowerCase()}`);
     opencodeAutoRestartService.stop();
+    opencodeStateMonitor.stop();
     scheduledTaskRuntime.shutdown();
 
     shutdownTimeout = setTimeout(() => {
@@ -146,6 +149,7 @@ export async function startBotApp(): Promise<void> {
     }
     cleanupBotRuntime("app_shutdown_complete");
     opencodeAutoRestartService.stop();
+    opencodeStateMonitor.stop();
     scheduledTaskRuntime.shutdown();
     await clearManagedServiceState().catch((error) => {
       logger.warn("[App] Failed to clear managed service state", error);
