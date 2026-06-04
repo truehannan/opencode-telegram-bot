@@ -431,3 +431,4 @@ Have questions, want to share your experience using the bot, or have an idea for
 ## License
 
 [MIT](LICENSE) © Ruslan Grinev
+| `OPENCODE_STATE_MONITOR_INTERVAL_SEC`      | Interval in seconds for the background state monitor that caches project, session, model, and agent info for `/status` |    No    | `15`                     |
